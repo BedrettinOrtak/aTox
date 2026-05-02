@@ -37,7 +37,7 @@ class Settings @Inject constructor(private val ctx: Context) {
         }
 
     var udpEnabled: Boolean
-        get() = preferences.getBoolean("udp_enabled", false)
+        get() = preferences.getBoolean("udp_enabled", true)
         set(enabled) = preferences.edit { putBoolean("udp_enabled", enabled) }
 
     var runAtStartup: Boolean

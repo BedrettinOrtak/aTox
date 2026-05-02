@@ -352,34 +352,39 @@ class ChatFragment : BaseFragment<FragmentChatBinding>(FragmentChatBinding::infl
 
         recordVoice.setOnLongClickListener { true } // Suppress default long-press click handling.
         recordVoice.setOnTouchListener { v, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (!recordVoice.isEnabled) return@setOnTouchListener false
-                    WindowInsetsControllerCompat(requireActivity().window, view).hide(WindowInsetsCompat.Type.ime())
-                    if (ContextCompat.checkSelfPermission(
-                            requireContext(),
-                            android.Manifest.permission.RECORD_AUDIO,
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        pendingPttStart = true
-                        recordPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                        return@setOnTouchListener true
+            try {
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        if (!recordVoice.isEnabled) return@setOnTouchListener false
+                        WindowInsetsControllerCompat(requireActivity().window, view)
+                            .hide(WindowInsetsCompat.Type.ime())
+                        if (ContextCompat.checkSelfPermission(
+                                requireContext(),
+                                android.Manifest.permission.RECORD_AUDIO,
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            pendingPttStart = true
+                            recordPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            return@setOnTouchListener true
+                        }
+                        startVoiceRecording()
+                        true
                     }
-                    startVoiceRecording()
-                    v.isPressed = true
-                    true
+                    MotionEvent.ACTION_UP -> {
+                        stopVoiceRecording(send = true)
+                        v.performClick()
+                        true
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        stopVoiceRecording(send = false)
+                        true
+                    }
+                    else -> false
                 }
-                MotionEvent.ACTION_UP -> {
-                    v.isPressed = false
-                    stopVoiceRecording(send = true)
-                    true
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    v.isPressed = false
-                    stopVoiceRecording(send = false)
-                    true
-                }
-                else -> false
+            } catch (t: Throwable) {
+                Log.e(TAG, "Voice recording touch handler failed", t)
+                stopVoiceRecording(send = false)
+                false
             }
         }
 

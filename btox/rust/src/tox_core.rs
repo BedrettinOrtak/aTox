@@ -190,3 +190,34 @@ fn validate_tox_id(s: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validates_correct_length() {
+        let ok = "0".repeat(76);
+        assert!(validate_tox_id(&ok).is_ok());
+    }
+
+    #[test]
+    fn rejects_wrong_length() {
+        assert!(validate_tox_id("ABCD").is_err());
+        assert!(validate_tox_id(&"0".repeat(75)).is_err());
+        assert!(validate_tox_id(&"0".repeat(77)).is_err());
+    }
+
+    #[test]
+    fn rejects_non_hex() {
+        let bad = format!("{}ZZ", "0".repeat(74));
+        assert!(validate_tox_id(&bad).is_err());
+    }
+
+    #[test]
+    fn bootstrap_pubkeys_are_valid_hex_32_bytes() {
+        for (_, _, pk) in BOOTSTRAP_NODES {
+            let bytes = hex::decode(pk).expect("hex");
+            assert_eq!(bytes.len(), 32, "{pk}");
+        }
+    }
+}

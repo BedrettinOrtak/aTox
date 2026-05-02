@@ -13,8 +13,9 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 # Varsayılan: stub mod — UI/iskeleti bağımsız test etmek için.
 default = []
 # c-toxcore FFI ile gerçek Tox protokolü (qTox uyumlu).
-# Android'de cargo-ndk + NDK gerektirir; build_android.{ps1,sh} otomatik halleder.
 real-tox = ["dep:rstox"]
+# Push-to-talk Opus kodlama (libopus sistem kütüphanesi gerektirir).
+ptt-opus = ["dep:opus"]
 
 [dependencies]
 # flutter_rust_bridge
@@ -38,10 +39,9 @@ hex = "0.4"
 
 # Logging
 log = "0.4"
-android_logger = "0.13"
 
-# Ses (Push-to-talk için Opus encode)
-opus = "0.3"
+# Ses (Push-to-talk için Opus encode — opsiyonel, libopus sistem paketi gerek)
+opus = { version = "0.3", optional = true }
 
 # Chunklı dosya transferi için yardımcı I/O
 bytes = "1"
@@ -51,6 +51,13 @@ once_cell = "1"
 
 # Host'ta (Android dışı) test/log
 env_logger = "0.11"
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.13"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
+tempfile = "3"
 
 [profile.release]
 lto = true

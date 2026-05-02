@@ -41,7 +41,6 @@ fn core() -> &'static Mutex<Option<ToxCore>> {
 // DTO'lar — flutter_rust_bridge bunları otomatik olarak Dart sınıflarına çevirir.
 // ---------------------------------------------------------------------------
 
-#[frb(dart_metadata = ("freezed"))]
 #[derive(Debug, Clone)]
 pub struct Friend {
     pub id: u32,
@@ -85,7 +84,6 @@ pub enum BtoxEvent {
 // ---------------------------------------------------------------------------
 
 /// Logger'ı başlat. Android'de logcat'a yazar.
-#[frb(sync)]
 pub fn init_logger() {
     #[cfg(target_os = "android")]
     {

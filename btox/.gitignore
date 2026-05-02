@@ -1,0 +1,19 @@
+# build artefaktları
+/rust/target/
+/flutter/build/
+/flutter/.dart_tool/
+/flutter/.flutter-plugins
+/flutter/.flutter-plugins-dependencies
+/flutter/android/.gradle/
+/flutter/android/local.properties
+/flutter/ios/Pods/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+

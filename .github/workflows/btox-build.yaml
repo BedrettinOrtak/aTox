@@ -1,0 +1,97 @@
+name: btox-build
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'btox/**'
+      - '.github/workflows/btox-build.yaml'
+  pull_request:
+    paths:
+      - 'btox/**'
+  workflow_dispatch:
+
+jobs:
+  rust-check:
+    name: Rust (host)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            btox/rust/target
+          key: btox-rust-${{ hashFiles('btox/rust/Cargo.toml') }}
+      - name: Install opus + libsodium (system deps for opus crate)
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev pkg-config
+      - name: Build (stub mode)
+        working-directory: btox/rust
+        run: cargo build --verbose
+      - name: Tests
+        working-directory: btox/rust
+        run: cargo test --verbose
+      - name: Clippy
+        working-directory: btox/rust
+        run: cargo clippy --all-targets -- -D warnings
+        continue-on-error: true
+
+  android-build:
+    name: Rust + Flutter APK
+    runs-on: ubuntu-24.04
+    needs: rust-check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK + NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 ndk;26.3.11579264'
+
+      - name: Set NDK env
+        run: echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.3.11579264" >> $GITHUB_ENV
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: System deps
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev
+
+      - name: Flutter create platform folders
+        working-directory: btox/flutter
+        run: |
+          flutter --version
+          flutter create --platforms=android .
+          flutter pub get
+
+      - name: Build Rust for Android
+        working-directory: btox
+        run: bash build_android.sh release
+
+      - name: Build debug APK
+        working-directory: btox/flutter
+        run: flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: btox-apk-debug
+          path: btox/flutter/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+

@@ -1,0 +1,34 @@
+name: btox
+description: BTOX — qTox uyumlu, Rust çekirdekli modern Tox istemcisi.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.24.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_rust_bridge: ^2.0.0
+  freezed_annotation: ^2.4.4
+  cupertino_icons: ^1.0.8
+  permission_handler: ^11.3.0
+  file_picker: ^8.0.0
+  record: ^5.1.0          # PTT için 48 kHz PCM yakalama
+  path_provider: ^2.1.3
+  intl: ^0.19.0
+  qr_flutter: ^4.1.0       # Tox ID QR kodu
+  mobile_scanner: ^5.2.0   # Tox ID QR okuma
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.11
+  freezed: ^2.5.7
+  flutter_lints: ^4.0.0
+  ffigen: ^11.0.0
+
+flutter:
+  uses-material-design: true
+

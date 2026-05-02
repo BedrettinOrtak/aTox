@@ -1,0 +1,9 @@
+# flutter_rust_bridge codegen yapılandırması
+# Çalıştır:  flutter_rust_bridge_codegen generate
+rust_input: rust/src/lib.rs
+dart_output: flutter/lib/bridge/generated.dart
+rust_output: rust/src/frb_generated.rs
+dart_entrypoint_class_name: BtoxBridge
+dart_format_line_length: 100
+full_dep: true
+

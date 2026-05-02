@@ -214,7 +214,9 @@ class Tox @Inject constructor(
     }
 
     private fun bootstrap() {
-        nodeRegistry.get(4).kForEach { node ->
+        // Use a larger initial fan-out so we connect faster, especially on LAN /
+        // restrictive networks where many nodes may be unreachable.
+        nodeRegistry.get(8).kForEach { node ->
             Log.i(TAG, "Bootstrapping from $node")
             tox.bootstrap(node.address, node.port, node.publicKey.bytes())
         }

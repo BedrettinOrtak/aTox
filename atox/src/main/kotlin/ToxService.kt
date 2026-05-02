@@ -40,6 +40,9 @@ import ltd.evilcorp.domain.tox.ToxSaveStatus
 
 private const val TAG = "ToxService"
 private const val NOTIFICATION_ID = 1984
+// Fast-retry schedule (in ms) used when we are offline so we connect quickly on
+// startup / weak networks. Falls back to a steady 60s once exhausted.
+private val BOOTSTRAP_RETRY_SCHEDULE_MS = longArrayOf(2_000L, 5_000L, 10_000L, 20_000L, 30_000L)
 private const val BOOTSTRAP_INTERVAL_MS = 60_000L
 
 class ToxService : LifecycleService() {
@@ -150,8 +153,25 @@ class ToxService : LifecycleService() {
                     }
 
                     if (connectionStatus == ConnectionStatus.None) {
-                        Log.i(TAG, "Gone offline, scheduling bootstrap")
-                        bootstrapTimer.schedule(BOOTSTRAP_INTERVAL_MS, BOOTSTRAP_INTERVAL_MS) {
+                        Log.i(TAG, "Gone offline, scheduling fast bootstrap retries")
+                        bootstrapTimer.cancel()
+                        bootstrapTimer = Timer()
+                        // Trigger a few quick re-bootstrap attempts up-front, then
+                        // settle into the steady 60s interval. This dramatically
+                        // shortens the time-to-first-connection, especially on
+                        // LAN where the very first random nodes may be unreachable.
+                        var cumulative = 0L
+                        for (delayMs in BOOTSTRAP_RETRY_SCHEDULE_MS) {
+                            cumulative += delayMs
+                            bootstrapTimer.schedule(cumulative) {
+                                Log.i(TAG, "Fast retry bootstrap (after ${cumulative}ms)")
+                                tox.isBootstrapNeeded = true
+                            }
+                        }
+                        bootstrapTimer.schedule(
+                            cumulative + BOOTSTRAP_INTERVAL_MS,
+                            BOOTSTRAP_INTERVAL_MS,
+                        ) {
                             Log.i(TAG, "Been offline for too long, bootstrapping")
                             tox.isBootstrapNeeded = true
                         }

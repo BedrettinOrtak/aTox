@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorSurface">#121316</color>
+    <color name="colorBottomBar">#1E2024</color>
+    <color name="colorOnSurface">#E3E2E6</color>
+</resources>

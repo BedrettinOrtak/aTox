@@ -11,8 +11,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.view.ContextMenu
 import android.view.MenuItem
@@ -61,6 +64,7 @@ private const val TAG = "ChatFragment"
 const val CONTACT_PUBLIC_KEY = "publicKey"
 const val FOCUS_ON_MESSAGE_BOX = "focusOnMessageBox"
 private const val MAX_CONFIRM_DELETE_STRING_LENGTH = 20
+private const val MIN_VOICE_RECORDING_MS = 500L
 
 class OpenMultiplePersistableDocuments : ActivityResultContracts.OpenMultipleDocuments() {
     override fun createIntent(context: Context, input: Array<String>): Intent = super.createIntent(context, input)
@@ -74,6 +78,22 @@ class ChatFragment : BaseFragment<FragmentChatBinding>(FragmentChatBinding::infl
     private var contactName = ""
     private var selectedFt: Int = Int.MIN_VALUE
     private var fts: List<FileTransfer> = listOf()
+
+    private var recorder: MediaRecorder? = null
+    private var recordingFile: File? = null
+    private var recordingStartedAt: Long = 0L
+    private var pendingPttStart: Boolean = false
+
+    private val recordPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted && pendingPttStart) {
+            pendingPttStart = false
+            startVoiceRecording()
+        } else if (!granted) {
+            Toast.makeText(requireContext(), R.string.recording_permission_required, Toast.LENGTH_LONG).show()
+        }
+    }
 
     private val exportBackupLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { dest ->
@@ -330,6 +350,39 @@ class ChatFragment : BaseFragment<FragmentChatBinding>(FragmentChatBinding::infl
             attachFilesLauncher.launch(arrayOf("*/*"))
         }
 
+        recordVoice.setOnLongClickListener { true } // Suppress default long-press click handling.
+        recordVoice.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (!recordVoice.isEnabled) return@setOnTouchListener false
+                    WindowInsetsControllerCompat(requireActivity().window, view).hide(WindowInsetsCompat.Type.ime())
+                    if (ContextCompat.checkSelfPermission(
+                            requireContext(),
+                            android.Manifest.permission.RECORD_AUDIO,
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        pendingPttStart = true
+                        recordPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                        return@setOnTouchListener true
+                    }
+                    startVoiceRecording()
+                    v.isPressed = true
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.isPressed = false
+                    stopVoiceRecording(send = true)
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.isPressed = false
+                    stopVoiceRecording(send = false)
+                    true
+                }
+                else -> false
+            }
+        }
+
         outgoingMessage.doAfterTextChanged {
             viewModel.setTyping(outgoingMessage.text.isNotEmpty())
             updateActions()
@@ -343,6 +396,9 @@ class ChatFragment : BaseFragment<FragmentChatBinding>(FragmentChatBinding::infl
     }
 
     override fun onPause() {
+        if (recorder != null) {
+            stopVoiceRecording(send = false)
+        }
         viewModel.setDraft(binding.outgoingMessage.text.toString())
         viewModel.setActiveChat(PublicKey(""))
         super.onPause()
@@ -431,15 +487,12 @@ class ChatFragment : BaseFragment<FragmentChatBinding>(FragmentChatBinding::infl
     }
 
     private fun updateActions() = binding.run {
-        send.visibility = if (outgoingMessage.text.isEmpty()) View.GONE else View.VISIBLE
-        attach.visibility = if (send.isVisible) View.GONE else View.VISIBLE
+        val hasText = outgoingMessage.text.isNotEmpty()
+        send.visibility = if (hasText) View.VISIBLE else View.GONE
+        recordVoice.visibility = if (hasText) View.GONE else View.VISIBLE
+        recordVoice.isEnabled = viewModel.contactOnline
         attach.isEnabled = viewModel.contactOnline
-        attach.setColorFilter(
-            ContextCompat.getColor(
-                requireContext(),
-                if (attach.isEnabled) R.color.colorPrimary else android.R.color.darker_gray,
-            ),
-        )
+        attach.alpha = if (attach.isEnabled) 1.0f else 0.4f
     }
 
     private fun navigateToCallScreen() {
@@ -448,5 +501,73 @@ class ChatFragment : BaseFragment<FragmentChatBinding>(FragmentChatBinding::infl
             R.id.action_chatFragment_to_callFragment,
             bundleOf(CONTACT_PUBLIC_KEY to contactPubKey),
         )
+    }
+
+    @Suppress("DEPRECATION")
+    private fun startVoiceRecording() {
+        if (recorder != null) return
+        val outDir = File(requireContext().cacheDir, "voice").apply { mkdirs() }
+        val outFile = File(
+            outDir,
+            "voice_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.m4a",
+        )
+        try {
+            val rec = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(requireContext())
+            } else {
+                MediaRecorder()
+            }
+            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
+            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            rec.setAudioEncodingBitRate(64_000)
+            rec.setAudioSamplingRate(44_100)
+            rec.setOutputFile(outFile.absolutePath)
+            rec.prepare()
+            rec.start()
+            recorder = rec
+            recordingFile = outFile
+            recordingStartedAt = SystemClock.elapsedRealtime()
+            Toast.makeText(requireContext(), R.string.recording_voice, Toast.LENGTH_SHORT).show()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to start voice recording", t)
+            try { recorder?.release() } catch (_: Throwable) {}
+            recorder = null
+            recordingFile = null
+            outFile.delete()
+            Toast.makeText(requireContext(), R.string.recording_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun stopVoiceRecording(send: Boolean) {
+        val rec = recorder ?: return
+        val file = recordingFile
+        val duration = SystemClock.elapsedRealtime() - recordingStartedAt
+        recorder = null
+        recordingFile = null
+        recordingStartedAt = 0L
+        try {
+            rec.stop()
+        } catch (t: Throwable) {
+            Log.w(TAG, "MediaRecorder.stop failed (likely too short)", t)
+        }
+        try { rec.release() } catch (_: Throwable) {}
+
+        if (!send || file == null) {
+            file?.delete()
+            return
+        }
+        if (duration < MIN_VOICE_RECORDING_MS || !file.exists() || file.length() == 0L) {
+            file.delete()
+            Toast.makeText(requireContext(), R.string.recording_too_short, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = FileProvider.getUriForFile(
+            requireContext(),
+            "${BuildConfig.APPLICATION_ID}.fileprovider",
+            file,
+        )
+        viewModel.setActiveChat(PublicKey(contactPubKey))
+        viewModel.createFt(uri)
     }
 }

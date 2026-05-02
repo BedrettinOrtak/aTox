@@ -2,8 +2,9 @@
 sdk-min = "21"
 sdk-target = "36"
 
-ksp = "2.3.6"
-android-plugin = "9.0.1"
+kotlin = "2.2.20"
+ksp = "2.2.20-2.0.4"
+android-plugin = "8.13.1"
 
 coroutines = "1.10.2"
 # TODO(robinlinden): dagger 2.56.x (last tested 2.56.2) results in:
@@ -21,6 +22,7 @@ tox4j-core = "0.2.3"
 
 [plugins]
 kotlinKsp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 androidApplication = { id = "com.android.application", version.ref = "android-plugin" }
 androidLibrary = { id = "com.android.library", version.ref = "android-plugin" }
 

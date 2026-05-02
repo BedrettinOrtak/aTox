@@ -29,6 +29,20 @@ enum class BootstrapNodeSource {
 class Settings @Inject constructor(private val ctx: Context) {
     private val preferences = PreferenceManager.getDefaultSharedPreferences(ctx)
 
+    init {
+        // One-time migration: previous versions defaulted UDP to OFF, which
+        // makes initial connections very slow and breaks LAN discovery. Flip
+        // it on for users that haven't customised it themselves.
+        if (!preferences.getBoolean("migration_udp_default_v1", false)) {
+            preferences.edit {
+                if (!preferences.contains("udp_enabled") || !preferences.getBoolean("udp_enabled", false)) {
+                    putBoolean("udp_enabled", true)
+                }
+                putBoolean("migration_udp_default_v1", true)
+            }
+        }
+    }
+
     var theme: Int
         get() = preferences.getInt("theme", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         set(theme) {
